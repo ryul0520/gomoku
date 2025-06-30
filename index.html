@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>온라인 오목 게임 with Firebase</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            flex-direction: column;
+        }
+        .hidden {
+            display: none !important;
+        }
+        #lobby {
+            display: flex;
+            flex-direction: column;
+            padding: 30px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        #lobby h1 {
+            margin-top: 0;
+        }
+        #lobby input {
+            margin-bottom: 10px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        #lobby button {
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            background-color: #007bff;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 5px;
+        }
+        #lobby button:hover {
+            background-color: #0056b3;
+        }
+        #game-screen {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+        #board-container {
+            position: relative;
+            width: 600px;
+            height: 600px;
+            background-color: #e3b769;
+            border: 2px solid #5c3d0d;
+        }
+        canvas {
+            display: block;
+        }
+        #game-info {
+            display: flex;
+            flex-direction: column;
+            width: 250px;
+            padding: 20px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        #game-info h2 {
+            margin-top: 0;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .player-info {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+            border: 2px solid transparent;
+        }
+        .player-info.active {
+            border-color: #007bff;
+            background-color: #e7f3ff;
+        }
+        #status-message {
+            font-weight: bold;
+            font-size: 1.2em;
+            color: #d9534f;
+            margin-top: 10px;
+            min-height: 30px;
+        }
+        #reset-btn {
+             margin-top: 20px;
+             padding: 10px;
+             border: none;
+             border-radius: 5px;
+             background-color: #28a745;
+             color: white;
+             font-size: 16px;
+             cursor: pointer;
+        }
+        #reset-btn:hover {
+            background-color: #218838;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="lobby">
+        <h1>온라인 오목</h1>
+        <input type="text" id="nickname" placeholder="닉네임을 입력하세요">
+        <button id="create-room-btn">방 만들기</button>
+        <hr style="width:100%; margin: 20px 0;">
+        <input type="text" id="room-id-input" placeholder="참여할 방 ID 입력">
+        <button id="join-room-btn">방 참여하기</button>
+    </div>
+
+    <div id="game-screen" class="hidden">
+        <div id="board-container">
+            <canvas id="omok-board" width="600" height="600"></canvas>
+        </div>
+        <div id="game-info">
+            <h2 id="room-id-display">방 ID: </h2>
+            <div id="player1-info" class="player-info">
+                <strong>흑돌:</strong> <span id="player1-name"></span>
+            </div>
+            <div id="player2-info" class="player-info">
+                <strong>백돌:</strong> <span id="player2-name"></span>
+            </div>
+            <div id="status-message"></div>
+            <button id="reset-btn">게임 초기화</button>
+        </div>
+    </div>
+
+    <script type="module">
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
+        import { getDatabase, ref, set, onValue, get, remove } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
+
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyC4xAfGXIEggX-JHfLgP7Rg89kTpSR0P80",
+            authDomain: "baseball-game-online.firebaseapp.com",
+            databaseURL: "https://baseball-game-online-default-rtdb.firebaseio.com", // Realtime Database URL 추가
+            projectId: "baseball-game-online",
+            storageBucket: "baseball-game-online.firebasestorage.app",
+            messagingSenderId: "780870375292",
+            appId: "1:780870375292:web:3070374a4629225c4e76f9"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+
+        // --- DOM Elements ---
+        const lobby = document.getElementById('lobby');
+        const gameScreen = document.getElementById('game-screen');
+        const nicknameInput = document.getElementById('nickname');
+        const createRoomBtn = document.getElementById('create-room-btn');
+        const joinRoomBtn = document.getElementById('join-room-btn');
+        const roomIdInput = document.getElementById('room-id-input');
+        const canvas = document.getElementById('omok-board');
+        const ctx = canvas.getContext('2d');
+        const statusMessage = document.getElementById('status-message');
+        const roomIdDisplay = document.getElementById('room-id-display');
+        const player1Name = document.getElementById('player1-name');
+        const player2Name = document.getElementById('player2-name');
+        const player1Info = document.getElementById('player1-info');
+        const player2Info = document.getElementById('player2-info');
+        const resetBtn = document.getElementById('reset-btn');
+
+        // --- Game Constants ---
+        const BOARD_SIZE = 15;
+        const CELL_SIZE = 40; // 600 / 15
+        const STONE_RADIUS = 18;
+        const PADDING = CELL_SIZE / 2;
+
+        // --- Game State ---
+        let currentRoomId = null;
+        let myPlayerNumber = null;
+        let boardState = [];
+        let roomUnsubscribe = null;
+
+        // --- Lobby Logic ---
+        createRoomBtn.addEventListener('click', async () => {
+            const nickname = nicknameInput.value.trim();
+            if (!nickname) {
+                alert('닉네임을 입력해주세요.');
+                return;
+            }
+            const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+            const roomRef = ref(database, `omok_rooms/${roomId}`);
+            
+            const initialGameState = {
+                players: {
+                    1: { nickname: nickname, ready: true }
+                },
+                board: createEmptyBoard(),
+                currentPlayer: 1,
+                gameState: 'waiting', // waiting, playing, finished
+                winner: null,
+                lastMove: null
+            };
+
+            await set(roomRef, initialGameState);
+            startGame(roomId, 1);
+        });
+
+        joinRoomBtn.addEventListener('click', async () => {
+            const nickname = nicknameInput.value.trim();
+            const roomId = roomIdInput.value.trim().toUpperCase();
+
+            if (!nickname) {
+                alert('닉네임을 입력해주세요.');
+                return;
+            }
+            if (!roomId) {
+                alert('방 ID를 입력해주세요.');
+                return;
+            }
+
+            const roomRef = ref(database, `omok_rooms/${roomId}`);
+            const snapshot = await get(roomRef);
+
+            if (snapshot.exists()) {
+                const roomData = snapshot.val();
+                if (roomData.players && Object.keys(roomData.players).length < 2) {
+                    const updatedData = {
+                        ...roomData,
+                        players: {
+                            ...roomData.players,
+                            2: { nickname: nickname, ready: true }
+                        },
+                        gameState: 'playing'
+                    };
+                    await set(roomRef, updatedData);
+                    startGame(roomId, 2);
+                } else {
+                    alert('방이 꽉 찼거나 유효하지 않습니다.');
+                }
+            } else {
+                alert('방을 찾을 수 없습니다.');
+            }
+        });
+
+        // --- Game Setup ---
+        function startGame(roomId, playerNumber) {
+            currentRoomId = roomId;
+            myPlayerNumber = playerNumber;
+            lobby.classList.add('hidden');
+            gameScreen.classList.remove('hidden');
+            roomIdDisplay.textContent = `방 ID: ${roomId}`;
+
+            const roomRef = ref(database, `omok_rooms/${roomId}`);
+            roomUnsubscribe = onValue(roomRef, (snapshot) => {
+                if (!snapshot.exists()) {
+                    alert("방이 사라졌습니다. 로비로 돌아갑니다.");
+                    window.location.reload();
+                    return;
+                }
+                const gameData = snapshot.val();
+                updateGame(gameData);
+            });
+
+            canvas.addEventListener('click', handleBoardClick);
+            resetBtn.addEventListener('click', resetGame);
+        }
+        
+        function createEmptyBoard() {
+            return Array(BOARD_SIZE).fill(0).map(() => Array(BOARD_SIZE).fill(0));
+        }
+
+        // --- Game Update and Drawing ---
+        function updateGame(gameData) {
+            boardState = gameData.board;
+            drawBoard();
+            drawStones(gameData.board);
+
+            if (gameData.lastMove) {
+                highlightLastMove(gameData.lastMove.x, gameData.lastMove.y);
+            }
+
+            // Update player info
+            player1Name.textContent = gameData.players[1]?.nickname || '대기 중...';
+            player2Name.textContent = gameData.players[2]?.nickname || '대기 중...';
+            
+            player1Info.classList.remove('active');
+            player2Info.classList.remove('active');
+            if (gameData.currentPlayer === 1) {
+                player1Info.classList.add('active');
+            } else if(gameData.currentPlayer === 2) {
+                player2Info.classList.add('active');
+            }
+
+            // Update status message
+            if (gameData.gameState === 'waiting') {
+                statusMessage.textContent = '상대방을 기다리고 있습니다...';
+            } else if (gameData.gameState === 'playing') {
+                const currentPlayerName = gameData.players[gameData.currentPlayer].nickname;
+                statusMessage.textContent = `${currentPlayerName} 님의 차례입니다.`;
+            } else if (gameData.gameState === 'finished') {
+                const winnerName = gameData.players[gameData.winner].nickname;
+                statusMessage.textContent = `게임 종료! ${winnerName} 님의 승리입니다!`;
+            }
+        }
+
+        function drawBoard() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#e3b769';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.strokeStyle = '#5c3d0d';
+            ctx.lineWidth = 1;
+
+            for (let i = 0; i < BOARD_SIZE; i++) {
+                // Vertical lines
+                ctx.beginPath();
+                ctx.moveTo(PADDING + i * CELL_SIZE, PADDING);
+                ctx.lineTo(PADDING + i * CELL_SIZE, canvas.height - PADDING);
+                ctx.stroke();
+                // Horizontal lines
+                ctx.beginPath();
+                ctx.moveTo(PADDING, PADDING + i * CELL_SIZE);
+                ctx.lineTo(canvas.width - PADDING, PADDING + i * CELL_SIZE);
+                ctx.stroke();
+            }
+
+            // Draw star points (화점)
+            const starPoints = [
+                {x: 3, y: 3}, {x: 11, y: 3},
+                {x: 3, y: 11}, {x: 11, y: 11},
+                {x: 7, y: 7}
+            ];
+            ctx.fillStyle = '#5c3d0d';
+            starPoints.forEach(p => {
+                ctx.beginPath();
+                ctx.arc(PADDING + p.x * CELL_SIZE, PADDING + p.y * CELL_SIZE, 5, 0, 2 * Math.PI);
+                ctx.fill();
+            });
+        }
+        
+        function drawStones(board) {
+            for (let y = 0; y < BOARD_SIZE; y++) {
+                for (let x = 0; x < BOARD_SIZE; x++) {
+                    if (board[y][x] !== 0) {
+                        drawStone(x, y, board[y][x]);
+                    }
+                }
+            }
+        }
+
+        function drawStone(x, y, player) {
+            const canvasX = PADDING + x * CELL_SIZE;
+            const canvasY = PADDING + y * CELL_SIZE;
+            
+            ctx.beginPath();
+            ctx.arc(canvasX, canvasY, STONE_RADIUS, 0, 2 * Math.PI);
+            
+            if (player === 1) { // Black stone
+                ctx.fillStyle = 'black';
+            } else { // White stone
+                ctx.fillStyle = 'white';
+            }
+            ctx.fill();
+        }
+
+        function highlightLastMove(x, y) {
+            const canvasX = PADDING + x * CELL_SIZE;
+            const canvasY = PADDING + y * CELL_SIZE;
+            ctx.strokeStyle = 'red';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(canvasX - STONE_RADIUS, canvasY - STONE_RADIUS, STONE_RADIUS * 2, STONE_RADIUS * 2);
+        }
+
+        // --- Game Logic ---
+        async function handleBoardClick(event) {
+            const roomRef = ref(database, `omok_rooms/${currentRoomId}`);
+            const snapshot = await get(roomRef);
+            if (!snapshot.exists()) return;
+
+            const gameData = snapshot.val();
+
+            if (gameData.gameState !== 'playing' || gameData.currentPlayer !== myPlayerNumber) {
+                return; // Not my turn or game is over
+            }
+
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = event.clientX - rect.left;
+            const mouseY = event.clientY - rect.top;
+
+            const x = Math.round((mouseX - PADDING) / CELL_SIZE);
+            const y = Math.round((mouseY - PADDING) / CELL_SIZE);
+
+            if (x < 0 || x >= BOARD_SIZE || y < 0 || y >= BOARD_SIZE) return;
+
+            if (gameData.board[y][x] !== 0) {
+                statusMessage.textContent = '이미 돌이 있는 곳입니다.';
+                return;
+            }
+            
+            // 3-3 금지 규칙 체크 (흑돌만)
+            if (myPlayerNumber === 1 && isForbiddenMove(x, y, 1, gameData.board)) {
+                statusMessage.textContent = '3-3 금지 위치입니다!';
+                return;
+            }
+            
+            const newBoard = gameData.board.map(row => [...row]);
+            newBoard[y][x] = myPlayerNumber;
+
+            const hasWon = checkWin(x, y, myPlayerNumber, newBoard);
+            
+            const updatedData = {
+                ...gameData,
+                board: newBoard,
+                lastMove: {x, y},
+                currentPlayer: myPlayerNumber === 1 ? 2 : 1,
+            };
+
+            if (hasWon) {
+                updatedData.gameState = 'finished';
+                updatedData.winner = myPlayerNumber;
+            }
+
+            await set(roomRef, updatedData);
+        }
+        
+        async function resetGame() {
+            if (!confirm("게임을 초기화하시겠습니까? 모든 진행 상황이 사라집니다.")) return;
+
+            const roomRef = ref(database, `omok_rooms/${currentRoomId}`);
+            const snapshot = await get(roomRef);
+            if (!snapshot.exists()) return;
+            const gameData = snapshot.val();
+
+            const resetData = {
+                ...gameData,
+                board: createEmptyBoard(),
+                currentPlayer: 1,
+                gameState: 'playing',
+                winner: null,
+                lastMove: null
+            };
+
+            await set(roomRef, resetData);
+        }
+
+
+        // --- Rule Checking ---
+        function checkWin(x, y, player, board) {
+            const directions = [
+                { dx: 1, dy: 0 },  // 가로
+                { dx: 0, dy: 1 },  // 세로
+                { dx: 1, dy: 1 },  // 대각선 \
+                { dx: 1, dy: -1 }  // 대각선 /
+            ];
+
+            for (const { dx, dy } of directions) {
+                let count = 1;
+                // 한 방향으로 체크
+                for (let i = 1; i < 5; i++) {
+                    const nx = x + i * dx;
+                    const ny = y + i * dy;
+                    if (nx >= 0 && nx < BOARD_SIZE && ny >= 0 && ny < BOARD_SIZE && board[ny][nx] === player) {
+                        count++;
+                    } else {
+                        break;
+                    }
+                }
+                // 반대 방향으로 체크
+                for (let i = 1; i < 5; i++) {
+                    const nx = x - i * dx;
+                    const ny = y - i * dy;
+                    if (nx >= 0 && nx < BOARD_SIZE && ny >= 0 && ny < BOARD_SIZE && board[ny][nx] === player) {
+                        count++;
+                    } else {
+                        break;
+                    }
+                }
+                if (count >= 5) return true;
+            }
+            return false;
+        }
+
+        // 3-3 금지 규칙 검사 함수
+        function isForbiddenMove(x, y, player, board) {
+            if (player !== 1) return false; // 흑돌에게만 적용
+
+            const tempBoard = board.map(row => [...row]);
+            tempBoard[y][x] = player;
+
+            let openThreeCount = 0;
+            const directions = [
+                { dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 1, dy: 1 }, { dx: 1, dy: -1 }
+            ];
+
+            for (const { dx, dy } of directions) {
+                if (createsOpenThree(x, y, player, tempBoard, dx, dy)) {
+                    openThreeCount++;
+                }
+            }
+            
+            return openThreeCount >= 2;
+        }
+        
+        // 특정 방향으로 열린 3을 만드는지 확인
+        function createsOpenThree(x, y, player, board, dx, dy) {
+            // 패턴: OXXXO (0, 1, 1, 1, 0)
+            const patterns = [
+                // X.XXO
+                { sequence: [player, 0, player, player, 0], checkIndex: 1 },
+                // XX.XO
+                { sequence: [player, player, 0, player, 0], checkIndex: 2 },
+            ];
+            
+            for (let i = -4; i <= 0; i++) {
+                // Check OXXXO pattern
+                if (checkPattern(x, y, player, board, dx, dy, i, [0, player, player, player, 0])) {
+                    // 이 수가 놓임으로써 OXXXO가 완성되는지 확인
+                    // 이 수가 그 3의 일부인지 확인해야 함
+                    const placedOn_1 = (x === x + (i + 1) * dx && y === y + (i + 1) * dy);
+                    const placedOn_2 = (x === x + (i + 2) * dx && y === y + (i + 2) * dy);
+                    const placedOn_3 = (x === x + (i + 3) * dx && y === y + (i + 3) * dy);
+                    if(placedOn_1 || placedOn_2 || placedOn_3) return true;
+                }
+            }
+
+            for(const p of patterns) {
+                for (let i = -4; i <= 0; i++) {
+                    if (checkPattern(x, y, player, board, dx, dy, i, p.sequence)) {
+                        // 내가 놓은 위치가 0이었던 곳(.)이 맞는지 확인
+                        const placedX = x + (i + p.checkIndex) * dx;
+                        const placedY = y + (i + p.checkIndex) * dy;
+                        if(x === placedX && y === placedY) return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function checkPattern(x, y, player, board, dx, dy, offset, pattern) {
+            for (let i = 0; i < pattern.length; i++) {
+                const nx = x + (i + offset) * dx;
+                const ny = y + (i + offset) * dy;
+
+                if (nx < 0 || nx >= BOARD_SIZE || ny < 0 || ny >= BOARD_SIZE) {
+                    return false; // 보드 밖
+                }
+                
+                let boardVal = board[ny][nx];
+                let patternVal = pattern[i];
+
+                if(patternVal === player && boardVal !== player) return false;
+                if(patternVal === 0 && boardVal !== 0) return false;
+            }
+            return true;
+        }
+
+        // 페이지를 닫거나 새로고침할 때 방 정리
+        window.addEventListener('beforeunload', () => {
+            if (currentRoomId && roomUnsubscribe) {
+                roomUnsubscribe(); // 리스너 제거
+                // 여기에 방을 삭제하거나 플레이어를 나간 것으로 처리하는 로직을 추가할 수 있습니다.
+                // 예: const roomRef = ref(database, `omok_rooms/${currentRoomId}`); remove(roomRef);
+                // 단, 두 명 중 한 명이 나가도 방이 사라지므로 신중하게 구현해야 합니다.
+            }
+        });
+    </script>
+</body>
+</html>
