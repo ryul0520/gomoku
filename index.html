@@ -3,148 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>온라인 오목 게임 (랜덤매칭)</title>
+    <title>온라인 오목 게임 (랜덤 매칭)</title>
     <style>
-        /* 기본 스타일 및 초기화 */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        html, body {
-            width: 100%;
-            min-height: 100vh;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f0f0f0;
-        }
-        body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-direction: column;
-            padding: 10px;
-        }
-        .hidden {
-            display: none !important;
-        }
-        
-        /* 로비 스타일 */
-        #lobby {
-            display: flex;
-            flex-direction: column;
-            padding: 30px;
-            background-color: white;
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            text-align: center;
-            width: 95%;
-            max-width: 400px;
-        }
-        #lobby h1 {
-            margin-top: 0;
-        }
-        #lobby input {
-            margin-bottom: 10px;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            font-size: 16px;
-        }
-        #lobby button {
-            padding: 10px 15px;
-            border: none;
-            border-radius: 5px;
-            font-size: 16px;
-            cursor: pointer;
-            margin-top: 5px;
-            transition: background-color 0.2s;
-        }
-        #create-room-btn {
-            background-color: #007bff;
-            color: white;
-        }
+        /* CSS 스타일은 이전과 동일합니다 */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; min-height: 100vh; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f0f0; }
+        body { display: flex; justify-content: center; align-items: center; flex-direction: column; padding: 10px; }
+        .hidden { display: none !important; }
+        #lobby { display: flex; flex-direction: column; padding: 30px; background-color: white; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); text-align: center; width: 95%; max-width: 400px; }
+        #lobby h1 { margin-top: 0; }
+        #lobby input { margin-bottom: 10px; padding: 10px; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; }
+        #lobby button { padding: 10px 15px; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; margin-top: 5px; transition: background-color 0.2s; }
+        #create-room-btn { background-color: #007bff; color: white; }
         #create-room-btn:hover { background-color: #0056b3; }
-        
-        #random-join-btn {
-            background-color: #28a745;
-            color: white;
-            margin-top: 10px;
-        }
-        #random-join-btn:hover { background-color: #218838; }
-
-        #join-room-btn {
-            background-color: #6c757d;
-            color: white;
-        }
+        #random-match-btn { background-color: #28a745; color: white; margin-top: 10px; }
+        #random-match-btn:hover { background-color: #218838; }
+        #join-room-btn { background-color: #6c757d; color: white; }
         #join-room-btn:hover { background-color: #5a6268; }
-
-        /* 게임 화면 스타일 (이전과 동일) */
-        #game-screen {
-            display: flex;
-            gap: 20px;
-            align-items: flex-start;
-            justify-content: center;
-            width: 100%;
-            flex-wrap: wrap; 
-        }
-        #board-container {
-            position: relative;
-            width: 600px;
-            height: 600px;
-            background-color: #e3b769;
-            border: 2px solid #5c3d0d;
-            flex-shrink: 0;
-        }
-        canvas {
-            display: block;
-            width: 100%;
-            height: 100%;
-        }
-        #game-info {
-            display: flex;
-            flex-direction: column;
-            width: 250px;
-            padding: 20px;
-            background-color: white;
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
-        #game-info h2 {
-            margin-top: 0;
-            border-bottom: 1px solid #eee;
-            padding-bottom: 10px;
-            font-size: 1.1em;
-            word-break: break-all;
-        }
-        .player-info {
-            margin: 10px 0;
-            padding: 10px;
-            border-radius: 5px;
-            border: 2px solid transparent;
-        }
-        .player-info.active {
-            border-color: #007bff;
-            background-color: #e7f3ff;
-        }
-        #status-message {
-            font-weight: bold;
-            font-size: 1.2em;
-            color: #d9534f;
-            margin-top: 10px;
-            min-height: 30px;
-        }
-        #timer-display {
-            font-size: 1.5em;
-            font-weight: bold;
-            color: #333;
-            margin-top: 15px;
-            text-align: center;
-            padding: 10px;
-            background: #f8f9fa;
-            border-radius: 5px;
-        }
-
-        /* 반응형 (이전과 동일) */
+        #game-screen { display: flex; gap: 20px; align-items: flex-start; justify-content: center; width: 100%; flex-wrap: wrap; }
+        #board-container { position: relative; width: 600px; height: 600px; background-color: #e3b769; border: 2px solid #5c3d0d; flex-shrink: 0; }
+        canvas { display: block; width: 100%; height: 100%; }
+        #game-info { display: flex; flex-direction: column; width: 250px; padding: 20px; background-color: white; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        #game-info h2 { margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 10px; font-size: 1.1em; word-break: break-all; }
+        .player-info { margin: 10px 0; padding: 10px; border-radius: 5px; border: 2px solid transparent; }
+        .player-info.active { border-color: #007bff; background-color: #e7f3ff; }
+        #status-message { font-weight: bold; font-size: 1.2em; color: #d9534f; margin-top: 10px; min-height: 30px; }
+        #timer-display { font-size: 1.5em; font-weight: bold; color: #333; margin-top: 15px; text-align: center; padding: 10px; background: #f8f9fa; border-radius: 5px; }
         @media (max-width: 900px) {
             body { padding: 0; justify-content: flex-start; }
             #game-screen { flex-direction: column; align-items: center; gap: 10px; padding: 10px 0; }
@@ -158,10 +42,10 @@
     <div id="lobby">
         <h1>온라인 오목</h1>
         <input type="text" id="nickname" placeholder="닉네임을 입력하세요">
-        <button id="create-room-btn">방 만들기</button>
-        <button id="random-join-btn">랜덤 참여</button>
+        <button id="create-room-btn">방 만들기 (친구와)</button>
+        <button id="random-match-btn">랜덤 매치</button>
         <hr style="width:100%; margin: 20px 0;">
-        <input type="text" id="room-id-input" placeholder="참여할 방 ID(6자리 숫자) 입력">
+        <input type="text" id="room-id-input" placeholder="받은 방 ID(6자리 숫자) 입력">
         <button id="join-room-btn">방 참여하기</button>
     </div>
 
@@ -184,7 +68,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
-        import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
+        import { getDatabase, ref, set, onValue, get, remove, onDisconnect } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
 
         // Firebase 설정
         const firebaseConfig = {
@@ -201,11 +85,12 @@
 
         // --- DOM Elements ---
         const lobby = document.getElementById('lobby');
-        const gameScreen = document.getElementById('game-screen');
         const nicknameInput = document.getElementById('nickname');
         const createRoomBtn = document.getElementById('create-room-btn');
-        const randomJoinBtn = document.getElementById('random-join-btn');
+        const randomMatchBtn = document.getElementById('random-match-btn');
         const joinRoomBtn = document.getElementById('join-room-btn');
+        // (나머지 DOM 요소는 이전과 동일)
+        const gameScreen = document.getElementById('game-screen');
         const roomIdInput = document.getElementById('room-id-input');
         const canvas = document.getElementById('omok-board');
         const ctx = canvas.getContext('2d');
@@ -217,11 +102,10 @@
         const player2Info = document.getElementById('player2-info');
         const timerDisplay = document.getElementById('timer-display');
 
-        // --- Game Constants ---
-        const BOARD_SIZE = 15;
-        const TURN_TIME_SECONDS = 45; // 시간제한 45초로 변경
 
-        // --- Game State ---
+        // --- Game Constants & State --- (이전과 동일)
+        const BOARD_SIZE = 15;
+        const TURN_TIME_SECONDS = 45;
         let currentRoomId = null;
         let myPlayerNumber = null;
         let roomUnsubscribe = null;
@@ -232,61 +116,73 @@
         createRoomBtn.addEventListener('click', async () => {
             const nickname = nicknameInput.value.trim();
             if (!nickname) { alert('닉네임을 입력해주세요.'); return; }
-            
-            // 6자리 숫자 방 ID 생성
-            const roomId = (Math.floor(Math.random() * 900000) + 100000).toString(); 
-            
+            const roomId = (Math.floor(Math.random() * 900000) + 100000).toString();
             const roomRef = ref(database, `omok_rooms/${roomId}`);
             const initialGameState = {
                 players: { 1: { nickname: nickname, ready: true } },
                 board: createEmptyBoard(),
-                currentPlayer: 1,
-                gameState: 'waiting', winner: null
+                currentPlayer: 1, gameState: 'waiting', winner: null
             };
             await set(roomRef, initialGameState);
             startGame(roomId, 1);
         });
 
-        joinRoomBtn.addEventListener('click', async () => {
+        joinRoomBtn.addEventListener('click', () => {
             const nickname = nicknameInput.value.trim();
             if (!nickname) { alert('닉네임을 입력해주세요.'); return; }
             const roomId = roomIdInput.value.trim();
             if (!roomId) { alert('방 ID를 입력해주세요.'); return; }
-            
             joinSpecificRoom(roomId, nickname);
         });
 
-        randomJoinBtn.addEventListener('click', async () => {
+        randomMatchBtn.addEventListener('click', async () => {
             const nickname = nicknameInput.value.trim();
             if (!nickname) { alert('닉네임을 입력해주세요.'); return; }
 
-            randomJoinBtn.disabled = true;
-            randomJoinBtn.textContent = '방 찾는 중...';
-            
-            const roomsRef = ref(database, 'omok_rooms');
-            const snapshot = await get(roomsRef);
-            
-            const availableRooms = [];
-            if (snapshot.exists()) {
-                snapshot.forEach(childSnapshot => {
-                    const roomData = childSnapshot.val();
-                    const roomId = childSnapshot.key;
-                    // 대기 중이고 플레이어가 1명인 방만 찾기
-                    if (roomData.gameState === 'waiting' && roomData.players && Object.keys(roomData.players).length === 1) {
-                        availableRooms.push(roomId);
-                    }
-                });
-            }
+            randomMatchBtn.disabled = true;
+            randomMatchBtn.textContent = '상대 찾는 중...';
 
-            if (availableRooms.length > 0) {
-                const randomRoomId = availableRooms[Math.floor(Math.random() * availableRooms.length)];
-                await joinSpecificRoom(randomRoomId, nickname);
+            const waitingPoolRef = ref(database, 'omok_waiting_pool');
+            const snapshot = await get(waitingPoolRef);
+
+            if (snapshot.exists()) {
+                // --- Case 2: 대기자가 있음 -> 게임 참여 ---
+                const waitingPlayer = snapshot.val();
+                const waitingRoomId = waitingPlayer.roomId;
+
+                // 대기 풀을 즉시 비워서 다른 사람이 못 들어오게 함
+                await remove(waitingPoolRef);
+                
+                // 상대방의 방에 참여
+                await joinSpecificRoom(waitingRoomId, nickname);
+
             } else {
-                alert('참여할 수 있는 방이 없습니다. 새로운 방을 만들어주세요.');
+                // --- Case 1: 대기자 없음 -> 새로운 방 만들고 대기 ---
+                const newRoomId = (Math.floor(Math.random() * 900000) + 100000).toString();
+                const newRoomRef = ref(database, `omok_rooms/${newRoomId}`);
+                
+                // 새로운 게임 방 생성
+                const initialGameState = {
+                    players: { 1: { nickname: nickname, ready: true } },
+                    board: createEmptyBoard(),
+                    currentPlayer: 1, gameState: 'waiting', winner: null
+                };
+                await set(newRoomRef, initialGameState);
+
+                // 대기 풀에 내 정보 등록
+                await set(waitingPoolRef, {
+                    nickname: nickname,
+                    roomId: newRoomId
+                });
+
+                // 내가 나갈 경우 대기풀에서 자동으로 삭제되도록 설정
+                onDisconnect(waitingPoolRef).remove();
+
+                // 게임 시작 (대기 상태로)
+                startGame(newRoomId, 1);
             }
-            
-            randomJoinBtn.disabled = false;
-            randomJoinBtn.textContent = '랜덤 참여';
+            randomMatchBtn.disabled = false;
+            randomMatchBtn.textContent = '랜덤 매치';
         });
 
         async function joinSpecificRoom(roomId, nickname) {
@@ -325,9 +221,11 @@
             window.addEventListener('resize', () => updateGame(null)); 
         }
 
+        // --- 나머지 JavaScript 코드는 이전 버전과 완전히 동일합니다 ---
+        // (updateGame, drawBoard, drawStones, handleBoardClick, placeStone, timer, rule checking 등)
+
         function createEmptyBoard() { return Array(BOARD_SIZE).fill(0).map(() => Array(BOARD_SIZE).fill(0)); }
 
-        // --- Game Update and Drawing --- (이하 로직은 이전과 대부분 동일)
         function updateGame(gameData) {
             if(gameData) { lastKnownGameData = gameData; } 
             else if (lastKnownGameData) { gameData = lastKnownGameData; } 
@@ -349,13 +247,13 @@
                 startTurnTimer(gameData.currentPlayer);
             } else {
                 clearInterval(turnInterval);
-                timerDisplay.textContent = "게임 종료";
                 if (gameData.gameState === 'waiting') {
                     statusMessage.textContent = '상대방을 기다리고 있습니다...';
-                    timerDisplay.textContent = "대기 중";
+                    timerDisplay.textContent = "매칭 중";
                 } else if (gameData.gameState === 'finished') {
                     const winnerName = gameData.players[gameData.winner].nickname;
                     statusMessage.textContent = `게임 종료! ${winnerName} 님의 승리입니다!`;
+                    timerDisplay.textContent = "게임 종료";
                 }
             }
         }
@@ -449,7 +347,6 @@
             }
         }
         
-        // --- Rule Checking (이하 로직은 변경 없음) ---
         function checkWin(x, y, player, board) {
             const directions = [{ dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 1, dy: 1 }, { dx: 1, dy: -1 }];
             for (const { dx, dy } of directions) {
@@ -484,6 +381,7 @@
             return true;
         }
         window.addEventListener('beforeunload', () => { if (currentRoomId && roomUnsubscribe) { roomUnsubscribe(); } });
+
     </script>
 </body>
 </html>
