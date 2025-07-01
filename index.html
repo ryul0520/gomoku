@@ -69,7 +69,7 @@
             <div id="status-message"></div>
             <div id="timer-display"></div>
             <div id="win-rate-container" class="hidden">
-                <h4>유리함 분석</h4>
+                <h4>기대 승률</h4> <!-- 텍스트 수정 -->
                 <div class="win-rate-bar-wrapper">
                     <div id="black-win-rate" class="win-rate-bar"></div>
                     <div id="white-win-rate" class="win-rate-bar"></div>
@@ -101,69 +101,29 @@
         let currentRoomId = null, myPlayerNumber = null, roomUnsubscribe = null, turnInterval = null, lastKnownGameData = null;
         let isMatchmaking = false, myWaitingRoomId = null;
 
-        // --- Lobby Logic ---
+        // --- Lobby & Game Setup (이전과 동일, 수정 없음) ---
         function createPlayerObject(nickname) { return { nickname: nickname, wantsRematch: false, connected: true }; }
         createRoomBtn.addEventListener('click', async () => { const nickname = nicknameInput.value.trim(); if (!nickname) { alert('닉네임을 입력해주세요.'); return; } const roomId = (Math.floor(Math.random() * 900000) + 100000).toString(); const roomRef = ref(database, `omok_rooms/${roomId}`); const initialGameState = { players: { 1: createPlayerObject(nickname) }, board: createEmptyBoard(), currentPlayer: 1, gameState: 'waiting', winner: null }; await set(roomRef, initialGameState); startGame(roomId, 1); });
-        
-        // ▼▼▼ 수정된 함수 ▼▼▼
-        async function joinSpecificRoom(roomId, nickname) {
-            const roomRef = ref(database, `omok_rooms/${roomId}`);
-            const snapshot = await get(roomRef);
-            if (snapshot.exists()) {
-                const roomData = snapshot.val();
-                if (roomData.players && Object.keys(roomData.players).length < 2) {
-                    const joinerPlayerObject = createPlayerObject(nickname);
-                    const creatorPlayerObject = roomData.players[1];
-                    let finalPlayers;
-                    let myAssignedNumber;
-
-                    if (Math.random() < 0.5) {
-                        finalPlayers = { 1: joinerPlayerObject, 2: creatorPlayerObject };
-                        myAssignedNumber = 1;
-                    } else {
-                        finalPlayers = { 1: creatorPlayerObject, 2: joinerPlayerObject };
-                        myAssignedNumber = 2;
-                    }
-                    const updatedData = { ...roomData, players: finalPlayers, gameState: 'playing' };
-                    await set(roomRef, updatedData);
-                    isMatchmaking = false;
-                    startGame(roomId, myAssignedNumber);
-                } else {
-                    alert('방이 꽉 찼거나 유효하지 않습니다.');
-                }
-            } else {
-                alert('방을 찾을 수 없습니다.');
-            }
-        }
-        
+        async function joinSpecificRoom(roomId, nickname) { const roomRef = ref(database, `omok_rooms/${roomId}`); const snapshot = await get(roomRef); if (snapshot.exists()) { const roomData = snapshot.val(); if (roomData.players && Object.keys(roomData.players).length < 2) { const joinerPlayerObject = createPlayerObject(nickname); const creatorPlayerObject = roomData.players[1]; let finalPlayers; let myAssignedNumber; if (Math.random() < 0.5) { finalPlayers = { 1: joinerPlayerObject, 2: creatorPlayerObject }; myAssignedNumber = 1; } else { finalPlayers = { 1: creatorPlayerObject, 2: joinerPlayerObject }; myAssignedNumber = 2; } const updatedData = { ...roomData, players: finalPlayers, gameState: 'playing' }; await set(roomRef, updatedData); isMatchmaking = false; startGame(roomId, myAssignedNumber); } else { alert('방이 꽉 찼거나 유효하지 않습니다.'); } } else { alert('방을 찾을 수 없습니다.'); } }
         randomMatchBtn.addEventListener('click', async () => { if (isMatchmaking) { await cancelMatchmaking(); } else { const nickname = nicknameInput.value.trim(); if (!nickname) { alert('닉네임을 입력해주세요.'); return; } isMatchmaking = true; randomMatchBtn.textContent = '매칭 취소'; randomMatchBtn.classList.add('matching'); const waitingPoolRef = ref(database, 'omok_waiting_pool'); const snapshot = await get(waitingPoolRef); if (snapshot.exists()) { const waitingRoomId = snapshot.val().roomId; await remove(waitingPoolRef); await joinSpecificRoom(waitingRoomId, nickname); } else { const newRoomId = (Math.floor(Math.random() * 900000) + 100000).toString(); myWaitingRoomId = newRoomId; const newRoomRef = ref(database, `omok_rooms/${newRoomId}`); const initialGameState = { players: { 1: createPlayerObject(nickname) }, board: createEmptyBoard(), currentPlayer: 1, gameState: 'waiting', winner: null }; await set(newRoomRef, initialGameState); await set(waitingPoolRef, { roomId: newRoomId }); onDisconnect(waitingPoolRef).remove(); startGame(newRoomId, 1); } } });
         async function cancelMatchmaking() { isMatchmaking = false; randomMatchBtn.textContent = '랜덤 매치'; randomMatchBtn.classList.remove('matching'); if (myWaitingRoomId) { await remove(ref(database, 'omok_waiting_pool')); await remove(ref(database, `omok_rooms/${myWaitingRoomId}`)); myWaitingRoomId = null; } alert('랜덤 매칭을 취소했습니다.'); window.location.reload(); }
         joinRoomBtn.addEventListener('click', () => { const nickname = nicknameInput.value.trim(); if (!nickname) { alert('닉네임을 입력해주세요.'); return; } const roomId = roomIdInput.value.trim(); if (!roomId) { alert('방 ID를 입력해주세요.'); return; } joinSpecificRoom(roomId, nickname); });
-
-        // --- Game Setup ---
         function startGame(roomId, playerNumber) { currentRoomId = roomId; myPlayerNumber = playerNumber; lobby.classList.add('hidden'); gameScreen.classList.remove('hidden'); roomIdDisplay.textContent = `방 ID: ${roomId}`; const myPlayerConnectionRef = ref(database, `omok_rooms/${currentRoomId}/players/${myPlayerNumber}/connected`); onDisconnect(myPlayerConnectionRef).set(false); const roomRef = ref(database, `omok_rooms/${roomId}`); roomUnsubscribe = onValue(roomRef, (snapshot) => { if (!snapshot.exists()) { if (!gameScreen.classList.contains('hidden')) { alert("방이 사라졌습니다. 로비로 돌아갑니다."); window.location.reload(); } return; } updateGame(snapshot.val()); }); canvas.addEventListener('click', handleBoardClick); window.addEventListener('resize', () => updateGame(null)); actionBtn.addEventListener('click', handleActionBtnClick); rematchBtn.addEventListener('click', handleRematch); endGameBtn.addEventListener('click', handleEndGame); }
-
-        // --- Game Update ---
-        // ▼▼▼ 수정된 함수 ▼▼▼
+        
+        // --- Game Update (수정됨) ---
         function updateGame(gameData) {
-            if (lastKnownGameData?.gameState === 'waiting' && gameData.gameState === 'playing') {
-                const myNickname = nicknameInput.value.trim();
-                if (gameData.players[1]?.nickname === myNickname) {
-                    myPlayerNumber = 1;
-                } else if (gameData.players[2]?.nickname === myNickname) {
-                    myPlayerNumber = 2;
-                }
-            }
+            if (lastKnownGameData?.gameState === 'waiting' && gameData.gameState === 'playing') { const myNickname = nicknameInput.value.trim(); if (gameData.players[1]?.nickname === myNickname) { myPlayerNumber = 1; } else if (gameData.players[2]?.nickname === myNickname) { myPlayerNumber = 2; } }
             if (gameData) { lastKnownGameData = gameData; } else if (lastKnownGameData) { gameData = lastKnownGameData; } else { return; }
             drawBoard(); drawStones(gameData.board);
             player1Name.textContent = gameData.players[1]?.nickname || '대기 중...'; player2Name.textContent = gameData.players[2]?.nickname || '대기 중...';
             player1Info.classList.remove('active'); player2Info.classList.remove('active');
             actionBtn.classList.add('hidden'); postGameControls.classList.add('hidden'); winRateContainer.classList.add('hidden'); clearInterval(turnInterval);
+
             if (gameData.gameState === 'playing') {
                 isMatchmaking = false; randomMatchBtn.textContent = '랜덤 매치'; randomMatchBtn.classList.remove('matching');
                 actionBtn.classList.remove('hidden'); actionBtn.textContent = '항복하기'; actionBtn.style.backgroundColor = '#dc3545';
                 winRateContainer.classList.remove('hidden');
-                calculateAdvantage(gameData.board);
+                calculateAdvantage(gameData.board); // 기대 승률 계산 호출
                 if (gameData.currentPlayer === 1) player1Info.classList.add('active'); else if (gameData.currentPlayer === 2) player2Info.classList.add('active');
                 statusMessage.textContent = `${gameData.players[gameData.currentPlayer].nickname} 님의 차례입니다.`;
                 startTurnTimer(gameData.currentPlayer);
@@ -182,30 +142,189 @@
             }
         }
         
-        // --- 이하 로직은 이전과 동일합니다 ---
+        // --- 버튼 핸들러 및 게임 기본 로직 (수정 없음) ---
         async function handleActionBtnClick() { const gameData = lastKnownGameData; if (!gameData) return; if (gameData.gameState === 'playing') { if (!confirm("정말로 항복하시겠습니까?")) return; const winnerNumber = myPlayerNumber === 1 ? 2 : 1; const updatedData = { ...gameData, gameState: 'finished', winner: winnerNumber, surrendered: true }; await set(ref(database, `omok_rooms/${currentRoomId}`), updatedData); } else if (gameData.gameState === 'waiting') { if (!confirm("방을 삭제하고 로비로 돌아가시겠습니까?")) return; if (myWaitingRoomId && myWaitingRoomId === currentRoomId) { await remove(ref(database, 'omok_waiting_pool')); } await remove(ref(database, `omok_rooms/${currentRoomId}`)); window.location.reload(); } }
         function updateRematchButton(gameData) { const opponentPlayerNumber = myPlayerNumber === 1 ? 2 : 1; const opponent = gameData.players[opponentPlayerNumber]; if (!opponent || opponent.connected === false) { rematchBtn.textContent = "상대방이 나갔습니다"; rematchBtn.disabled = true; return; } const myStatus = gameData.players[myPlayerNumber].wantsRematch; const opponentStatus = opponent.wantsRematch; if (myStatus) { rematchBtn.textContent = "재대결 요청함 (대기중)"; rematchBtn.disabled = true; } else if (opponentStatus) { rematchBtn.textContent = "상대방이 재대결 요청! (수락)"; rematchBtn.disabled = false; } else { rematchBtn.textContent = "다시하기"; rematchBtn.disabled = false; } }
-        async function handleRematch() { const roomRef = ref(database, `omok_rooms/${currentRoomId}`); const snapshot = await get(roomRef); if (!snapshot.exists()) return; const gameData = snapshot.val(); const opponentPlayerNumber = myPlayerNumber === 1 ? 2 : 1; if (gameData.players[opponentPlayerNumber]?.wantsRematch) { const newGameData = { ...gameData, board: createEmptyBoard(), currentPlayer: 1, gameState: 'playing', winner: null, surrendered: false, players: { 1: { ...gameData.players[1], wantsRematch: false, connected: true }, 2: { ...gameData.players[2], wantsRematch: false, connected: true } } }; await set(roomRef, newGameData); } else { const myPlayerRef = ref(database, `omok_rooms/${currentRoomId}/players/${myPlayerNumber}/wantsRematch`); await set(myPlayerRef, true); } }
+        async function handleRematch() { const roomRef = ref(database, `omok_rooms/${currentRoomId}`); const snapshot = await get(roomRef); if (!snapshot.exists()) return; const gameData = snapshot.val(); const opponentPlayerNumber = myPlayerNumber === 1 ? 2 : 1; if (gameData.players[opponentPlayerNumber]?.wantsRematch) { const player1 = gameData.players[1]; const player2 = gameData.players[2]; if (Math.random() < 0.5) { [player1, player2] = [player2, player1]; } const newGameData = { ...gameData, board: createEmptyBoard(), currentPlayer: 1, gameState: 'playing', winner: null, surrendered: false, players: { 1: { ...player1, wantsRematch: false, connected: true }, 2: { ...player2, wantsRematch: false, connected: true } } }; await set(roomRef, newGameData); } else { const myPlayerRef = ref(database, `omok_rooms/${currentRoomId}/players/${myPlayerNumber}/wantsRematch`); await set(myPlayerRef, true); } }
         async function handleEndGame() { const roomRef = ref(database, `omok_rooms/${currentRoomId}`); await remove(roomRef); window.location.reload(); }
         function createEmptyBoard() { return Array(BOARD_SIZE).fill(0).map(() => Array(BOARD_SIZE).fill(0)); }
         function drawBoard() { canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight; const CELL_SIZE = canvas.width / BOARD_SIZE; const PADDING = CELL_SIZE / 2; ctx.fillStyle = '#e3b769'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.strokeStyle = '#5c3d0d'; ctx.lineWidth = 1; for (let i = 0; i < BOARD_SIZE; i++) { ctx.beginPath(); ctx.moveTo(PADDING + i * CELL_SIZE, PADDING); ctx.lineTo(PADDING + i * CELL_SIZE, canvas.height - PADDING); ctx.stroke(); ctx.beginPath(); ctx.moveTo(PADDING, PADDING + i * CELL_SIZE); ctx.lineTo(canvas.width - PADDING, PADDING + i * CELL_SIZE); ctx.stroke(); } const starPoints = [{x: 3, y: 3}, {x: 11, y: 3}, {x: 3, y: 11}, {x: 11, y: 11}, {x: 7, y: 7}]; ctx.fillStyle = '#5c3d0d'; starPoints.forEach(p => { ctx.beginPath(); ctx.arc(PADDING + p.x * CELL_SIZE, PADDING + p.y * CELL_SIZE, CELL_SIZE * 0.1, 0, 2 * Math.PI); ctx.fill(); }); }
         function drawStones(board) { if (!board) return; for (let y = 0; y < BOARD_SIZE; y++) { for (let x = 0; x < BOARD_SIZE; x++) { if (board[y][x] !== 0) drawStone(x, y, board[y][x]); } } }
         function drawStone(x, y, player) { const CELL_SIZE = canvas.width / BOARD_SIZE; const PADDING = CELL_SIZE / 2; const STONE_RADIUS = CELL_SIZE * 0.45; const canvasX = PADDING + x * CELL_SIZE; const canvasY = PADDING + y * CELL_SIZE; ctx.beginPath(); ctx.arc(canvasX, canvasY, STONE_RADIUS, 0, 2 * Math.PI); ctx.fillStyle = (player === 1) ? 'black' : 'white'; ctx.fill(); }
-        async function handleBoardClick(event) { const roomRef = ref(database, `omok_rooms/${currentRoomId}`); const snapshot = await get(roomRef); if (!snapshot.exists()) return; const gameData = snapshot.val(); if (gameData.gameState !== 'playing' || gameData.currentPlayer !== myPlayerNumber) return; const rect = canvas.getBoundingClientRect(); const mouseX = event.clientX - rect.left; const mouseY = event.clientY - rect.top; const CELL_SIZE = canvas.clientWidth / BOARD_SIZE; const PADDING = CELL_SIZE / 2; const x = Math.round((mouseX - PADDING) / CELL_SIZE); const y = Math.round((mouseY - PADDING) / CELL_SIZE); if (x < 0 || x >= BOARD_SIZE || y < 0 || y >= BOARD_SIZE) return; if (gameData.board[y][x] !== 0) { statusMessage.textContent = '이미 돌이 있는 곳입니다.'; return; } if (myPlayerNumber === 1 && isForbiddenMove(x, y, 1, gameData.board)) { statusMessage.textContent = '3-3 금지 위치입니다!'; return; } clearInterval(turnInterval); await placeStone(x, y, myPlayerNumber, gameData); }
+        async function handleBoardClick(event) { const roomRef = ref(database, `omok_rooms/${currentRoomId}`); const snapshot = await get(roomRef); if (!snapshot.exists()) return; const gameData = snapshot.val(); if (gameData.gameState !== 'playing' || gameData.currentPlayer !== myPlayerNumber) return; const rect = canvas.getBoundingClientRect(); const mouseX = event.clientX - rect.left; const mouseY = event.clientY - rect.top; const CELL_SIZE = canvas.clientWidth / BOARD_SIZE; const PADDING = CELL_SIZE / 2; const x = Math.round((mouseX - PADDING) / CELL_SIZE); const y = Math.round((mouseY - PADDING) / CELL_SIZE); if (x < 0 || x >= BOARD_SIZE || y < 0 || y >= BOARD_SIZE) return; if (gameData.board[y][x] !== 0) { statusMessage.textContent = '이미 돌이 있는 곳입니다.'; return; } if (myPlayerNumber === 1 && isForbiddenMove(x, y, gameData.board)) { statusMessage.textContent = '금수(3-3) 위치입니다!'; return; } clearInterval(turnInterval); await placeStone(x, y, myPlayerNumber, gameData); }
         async function placeStone(x, y, player, currentGameData) { const newBoard = currentGameData.board.map(row => [...row]); newBoard[y][x] = player; const hasWon = checkWin(x, y, player, newBoard); const updatedData = { ...currentGameData, board: newBoard, currentPlayer: player === 1 ? 2 : 1 }; if (hasWon) { updatedData.gameState = 'finished'; updatedData.winner = player; } const roomRef = ref(database, `omok_rooms/${currentRoomId}`); await set(roomRef, updatedData); }
         function startTurnTimer(currentPlayer) { clearInterval(turnInterval); let timeLeft = TURN_TIME_SECONDS; timerDisplay.textContent = `남은 시간: ${timeLeft}초`; turnInterval = setInterval(async () => { timeLeft--; timerDisplay.textContent = `남은 시간: ${timeLeft}초`; if (timeLeft < 0) { clearInterval(turnInterval); if (myPlayerNumber === currentPlayer) { statusMessage.textContent = "시간 초과! 무작위 위치에 돌을 놓습니다."; await makeRandomMove(); } } }, 1000); }
-        async function makeRandomMove() { const roomRef = ref(database, `omok_rooms/${currentRoomId}`); const snapshot = await get(roomRef); if (!snapshot.exists()) return; const gameData = snapshot.val(); if(gameData.currentPlayer !== myPlayerNumber) return; const emptySpots = []; for (let y = 0; y < BOARD_SIZE; y++) { for (let x = 0; x < BOARD_SIZE; x++) { if (gameData.board[y][x] === 0) emptySpots.push({ x, y }); }} if (emptySpots.length === 0) return; let validMoveFound = false; while (emptySpots.length > 0 && !validMoveFound) { const randomIndex = Math.floor(Math.random() * emptySpots.length); const { x, y } = emptySpots[randomIndex]; if (myPlayerNumber === 1 && isForbiddenMove(x, y, 1, gameData.board)) { emptySpots.splice(randomIndex, 1); } else { await placeStone(x, y, myPlayerNumber, gameData); validMoveFound = true; } } if (!validMoveFound) { statusMessage.textContent = "착수할 유효한 위치가 없습니다! 턴을 넘깁니다."; const updatedData = { ...gameData, currentPlayer: myPlayerNumber === 1 ? 2 : 1 }; await set(roomRef, updatedData); } }
+        async function makeRandomMove() { const roomRef = ref(database, `omok_rooms/${currentRoomId}`); const snapshot = await get(roomRef); if (!snapshot.exists()) return; const gameData = snapshot.val(); if(gameData.currentPlayer !== myPlayerNumber) return; const emptySpots = []; for (let y = 0; y < BOARD_SIZE; y++) { for (let x = 0; x < BOARD_SIZE; x++) { if (gameData.board[y][x] === 0 && !isForbiddenMove(x, y, gameData.board)) emptySpots.push({ x, y }); }} if (emptySpots.length === 0) { statusMessage.textContent = "착수할 유효한 위치가 없습니다! 턴을 넘깁니다."; const updatedData = { ...gameData, currentPlayer: myPlayerNumber === 1 ? 2 : 1 }; await set(roomRef, updatedData); return; } const { x, y } = emptySpots[Math.floor(Math.random() * emptySpots.length)]; await placeStone(x, y, myPlayerNumber, gameData); }
         function checkWin(x, y, player, board) { const directions = [{ dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 1, dy: 1 }, { dx: 1, dy: -1 }]; for (const { dx, dy } of directions) { let count = 1; for (let i = 1; i < 5; i++) { const nx = x + i * dx, ny = y + i * dy; if (nx >= 0 && nx < BOARD_SIZE && ny >= 0 && ny < BOARD_SIZE && board[ny][nx] === player) count++; else break; } for (let i = 1; i < 5; i++) { const nx = x - i * dx, ny = y - i * dy; if (nx >= 0 && nx < BOARD_SIZE && ny >= 0 && ny < BOARD_SIZE && board[ny][nx] === player) count++; else break; } if (count >= 5) return true; } return false; }
-        function isForbiddenMove(x, y, player, board) { if (player !== 1) return false; const tempBoard = board.map(row => [...row]); tempBoard[y][x] = player; let openThreeCount = 0; const directions = [{ dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 1, dy: 1 }, { dx: 1, dy: -1 }]; for (const { dx, dy } of directions) { if (createsOpenThree(x, y, player, tempBoard, dx, dy)) { openThreeCount++; } } return openThreeCount >= 2; }
-        function createsOpenThree(x, y, player, board, dx, dy) { const patterns = [{ sequence: [player, 0, player, player, 0], checkIndex: 1 }, { sequence: [player, player, 0, player, 0], checkIndex: 2 },]; for (let i = -4; i <= 0; i++) { if (checkPattern(x, y, player, board, dx, dy, i, [0, player, player, player, 0])) { const p1 = (i + 1), p2 = (i + 2), p3 = (i + 3); const placedOnX = (x === x + p1*dx && y === y + p1*dy) || (x === x + p2*dx && y === y + p2*dy) || (x === x + p3*dx && y === y + p3*dy); if(placedOnX) return true; }} for(const p of patterns) { for (let i = -4; i <= 0; i++) { if (checkPattern(x, y, player, board, dx, dy, i, p.sequence)) { const placedX = x + (i + p.checkIndex) * dx; const placedY = y + (i + p.checkIndex) * dy; if(x === placedX && y === placedY) return true; }}} return false; }
-        function checkPattern(x, y, player, board, dx, dy, offset, pattern) { for (let i = 0; i < pattern.length; i++) { const nx = x + (i + offset) * dx; const ny = y + (i + offset) * dy; if (nx < 0 || nx >= BOARD_SIZE || ny < 0 || ny >= BOARD_SIZE) return false; let boardVal = board[ny][nx]; let patternVal = pattern[i]; if(patternVal === player && boardVal !== player) return false; if(patternVal === 0 && boardVal !== 0) return false; } return true; }
-        const PATTERN_SCORES = { FIVE_IN_A_ROW: 100000, OPEN_FOUR: 10000, CLOSED_FOUR: 1000, OPEN_THREE: 100, CLOSED_THREE: 10, OPEN_TWO: 1, };
-        function calculateAdvantage(board) { const scores = { 1: 0, 2: 0 }; evaluateBoard(board, scores); const totalScore = scores[1] + scores[2]; if (totalScore === 0) { updateWinRateUI(50); return; } const blackAdvantage = (scores[1] / totalScore) * 100; updateWinRateUI(blackAdvantage); }
-        function updateWinRateUI(blackPercentage) { const whitePercentage = 100 - blackPercentage; blackWinRate.style.width = `${blackPercentage}%`; whiteWinRate.style.width = `${whitePercentage}%`; blackWinRate.textContent = `${Math.round(blackPercentage)}%`; whiteWinRate.textContent = `${Math.round(whitePercentage)}%`; }
-        function evaluateBoard(board, scores) { const directions = [{ dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 1, dy: 1 }, { dx: 1, dy: -1 }]; for (let y = 0; y < BOARD_SIZE; y++) { for (let x = 0; x < BOARD_SIZE; x++) { if (board[y][x] !== 0) { directions.forEach(({ dx, dy }) => { analyzeLine(board, x, y, dx, dy, scores); }); } } } }
-        function analyzeLine(board, x, y, dx, dy, scores) { const p = board[y][x]; if (p === 0) return; if (countStones(board, x, y, dx, dy, p) >= 5) { scores[p] += PATTERN_SCORES.FIVE_IN_A_ROW; return; } if (checkPatternSimple(board, x, y, dx, dy, p, [0, p, p, p, p, 0])) { scores[p] += PATTERN_SCORES.OPEN_FOUR; return; } if (checkPatternSimple(board, x, y, dx, dy, p, [0, p, p, p, p, 3-p]) || checkPatternSimple(board, x, y, dx, dy, p, [3-p, p, p, p, p, 0])) { scores[p] += PATTERN_SCORES.CLOSED_FOUR; return; } if (checkPatternSimple(board, x, y, dx, dy, p, [0, p, p, p, 0, 0]) || checkPatternSimple(board, x, y, dx, dy, p, [0, 0, p, p, p, 0])) { scores[p] += PATTERN_SCORES.OPEN_THREE; return; } if (checkPatternSimple(board, x, y, dx, dy, p, [3-p, p, p, p, 0, 0]) || checkPatternSimple(board, x, y, dx, dy, p, [0, 0, p, p, p, 3-p])) { scores[p] += PATTERN_SCORES.CLOSED_THREE; } if (checkPatternSimple(board, x, y, dx, dy, p, [0, 0, p, p, 0, 0]) || checkPatternSimple(board, x, y, dx, dy, p, [0, p, p, 0, 0, 0])) { scores[p] += PATTERN_SCORES.OPEN_TWO; } }
-        function checkPatternSimple(board, x, y, dx, dy, player, pattern) { if (pattern[0] !== 0 && pattern[0] !== player) return false; for (let i = 0; i < pattern.length; i++) { const nx = x + i * dx; const ny = y + i * dy; if (nx < 0 || nx >= BOARD_SIZE || ny < 0 || ny >= BOARD_SIZE) return false; const boardVal = board[ny][nx]; const patternVal = pattern[i]; if (patternVal === player && boardVal !== player) return false; if (patternVal === 0 && boardVal !== 0) return false; if (patternVal === (3-player) && boardVal !== (3-player)) return false; } return true; }
-        function countStones(board, x, y, dx, dy, player) { let count = 0; for(let i = 0; i < 5; i++) { const nx = x + i * dx; const ny = y + i * dy; if (nx >= 0 && nx < BOARD_SIZE && ny >= 0 && ny < BOARD_SIZE && board[ny][nx] === player) { count++; } else { break; } } return count; }
+        
+        // --- ▼▼▼ 3-3 금수 로직 (수정 및 개선) ▼▼▼ ---
+        function isForbiddenMove(x, y, board) {
+            const tempBoard = board.map(row => [...row]);
+            tempBoard[y][x] = 1; // 흑돌(1)을 놓는다고 가정
+            
+            let openThreeCount = 0;
+            const directions = [{ dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 1, dy: 1 }, { dx: 1, dy: -1 }];
+            
+            for (const { dx, dy } of directions) {
+                // 한 방향과 그 반대 방향을 한 번에 체크하여 중복 방지
+                if (createsOpenThree(x, y, tempBoard, dx, dy)) {
+                    openThreeCount++;
+                }
+            }
+            return openThreeCount >= 2;
+        }
+
+        function createsOpenThree(x, y, board, dx, dy) {
+            // 패턴: 01110 (열린 3)
+            const p = 1; // player
+            const e = 0; // empty
+            const patterns = [
+                {p: [e, p, p, p, e], checkIdx: 1},
+                {p: [e, p, p, e, p], checkIdx: 1},
+                {p: [e, p, e, p, p], checkIdx: 1},
+            ];
+
+            for(const patternInfo of patterns) {
+                // 새로 놓은 돌(x,y)이 패턴의 어느 위치에 해당하는지 모두 체크
+                for (let i = 1; i <= 3; i++) { // p가 있는 위치
+                    if (patternInfo.p[i] !== p) continue;
+                    
+                    const startX = x - i * dx;
+                    const startY = y - i * dy;
+
+                    if (checkLine(startX, startY, board, dx, dy, patternInfo.p)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function checkLine(x, y, board, dx, dy, pattern) {
+            for (let i = 0; i < pattern.length; i++) {
+                const nx = x + i * dx;
+                const ny = y + i * dy;
+                if (nx < 0 || nx >= BOARD_SIZE || ny < 0 || ny >= BOARD_SIZE) return false;
+                if (board[ny][nx] !== pattern[i]) return false;
+            }
+            return true;
+        }
+
+        // --- ▼▼▼ 기대 승률 계산 로직 (전면 재설계) ▼▼▼ ---
+        const PATTERN_SCORES = {
+            FIVE: 100000,
+            OPEN_FOUR: 10000,
+            CLOSED_FOUR: 1000,
+            OPEN_THREE: 500,
+            CLOSED_THREE: 50,
+            OPEN_TWO: 10,
+            CLOSED_TWO: 1,
+        };
+
+        function calculateAdvantage(board) {
+            const blackScore = evaluateBoard(board, 1);
+            const whiteScore = evaluateBoard(board, 2);
+
+            // 점수가 둘 다 0일 때 50:50
+            if (blackScore === 0 && whiteScore === 0) {
+                updateWinRateUI(50);
+                return;
+            }
+            // 안정적인 비율 계산을 위해 작은 값(10)을 더함
+            const totalScore = blackScore + whiteScore + 10;
+            const blackAdvantage = (blackScore / totalScore) * 100;
+            updateWinRateUI(blackAdvantage);
+        }
+
+        function updateWinRateUI(blackPercentage) {
+            let blackP = Math.round(blackPercentage);
+            let whiteP = 100 - blackP;
+            
+            // 한쪽이 100%면 다른 쪽은 0%로 확실하게 표시
+            if(blackP > 99) { blackP = 100; whiteP = 0; }
+            if(whiteP > 99) { whiteP = 100; blackP = 0; }
+
+            blackWinRate.style.width = `${blackP}%`;
+            whiteWinRate.style.width = `${whiteP}%`;
+            blackWinRate.textContent = `${blackP}%`;
+            whiteWinRate.textContent = `${whiteP}%`;
+        }
+
+        function evaluateBoard(board, player) {
+            let totalScore = 0;
+            const directions = [
+                { dx: 1, dy: 0 },  // 가로
+                { dx: 0, dy: 1 },  // 세로
+                { dx: 1, dy: 1 },  // 대각선 \
+                { dx: 1, dy: -1 }  // 대각선 /
+            ];
+            
+            // 모든 라인을 중복 없이 한 번씩만 분석
+            for (let y = 0; y < BOARD_SIZE; y++) {
+                for (let x = 0; x < BOARD_SIZE; x++) {
+                    directions.forEach(({ dx, dy }) => {
+                        // 대각선 / 방향은 아래쪽 절반만 스캔 (중복 방지)
+                        if (dx === 1 && dy === -1 && y < 4) return;
+
+                        let stoneCount = 0;
+                        let emptyCount = 0;
+                        let openEnds = 0;
+                        
+                        // 현재 위치에서 5칸 라인 분석
+                        let blocked = false;
+                        for (let i = 0; i < 5; i++) {
+                            const nx = x + i * dx;
+                            const ny = y + i * dy;
+                            if (nx < 0 || nx >= BOARD_SIZE || ny < 0 || ny >= BOARD_SIZE) {
+                                blocked = true;
+                                break;
+                            }
+                            if (board[ny][nx] === player) stoneCount++;
+                            else if (board[ny][nx] === 0) emptyCount++;
+                            else {
+                                blocked = true; // 상대 돌에 의해 막힘
+                                break;
+                            }
+                        }
+
+                        if (blocked) return;
+
+                        // 라인 앞뒤의 상태를 확인하여 열린 상태인지 판단
+                        const beforeX = x - dx;
+                        const beforeY = y - dy;
+                        const afterX = x + 5 * dx;
+                        const afterY = y + 5 * dy;
+
+                        if (beforeX >= 0 && beforeX < BOARD_SIZE && beforeY >= 0 && beforeY < BOARD_SIZE && board[beforeY][beforeX] === 0) {
+                            openEnds++;
+                        }
+                        if (afterX >= 0 && afterX < BOARD_SIZE && afterY >= 0 && afterY < BOARD_SIZE && board[afterY][afterX] === 0) {
+                            openEnds++;
+                        }
+                        
+                        totalScore += getScore(stoneCount, openEnds);
+                    });
+                }
+            }
+            return totalScore;
+        }
+
+        function getScore(stoneCount, openEnds) {
+            if (stoneCount === 5) return PATTERN_SCORES.FIVE;
+            if (openEnds === 0 && stoneCount < 4) return 0; // 양쪽이 막힌 4목 미만은 점수 없음
+
+            switch (stoneCount) {
+                case 4:
+                    return openEnds === 2 ? PATTERN_SCORES.OPEN_FOUR : PATTERN_SCORES.CLOSED_FOUR;
+                case 3:
+                    return openEnds === 2 ? PATTERN_SCORES.OPEN_THREE : PATTERN_SCORES.CLOSED_THREE;
+                case 2:
+                    return openEnds === 2 ? PATTERN_SCORES.OPEN_TWO : PATTERN_SCORES.CLOSED_TWO;
+                default:
+                    return 0;
+            }
+        }
+        
         window.addEventListener('beforeunload', () => { if (currentRoomId && roomUnsubscribe) { roomUnsubscribe(); } });
     </script>
 </body>
