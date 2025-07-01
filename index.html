@@ -26,12 +26,6 @@
         .player-info.active { border-color: #007bff; background-color: #e7f3ff; }
         #status-message { font-weight: bold; font-size: 1.15em; color: #d9534f; margin-top: 10px; min-height: 50px; }
         #timer-display { font-size: 1.5em; font-weight: bold; color: #333; margin-top: 15px; text-align: center; padding: 10px; background: #f8f9fa; border-radius: 5px; }
-        #win-rate-container { margin-top: 20px; }
-        #win-rate-container h4 { margin-bottom: 8px; font-size: 1em; color: #555; text-align: center; }
-        .win-rate-bar-wrapper { display: flex; width: 100%; height: 25px; background-color: #e9ecef; border-radius: 5px; overflow: hidden; border: 1px solid #dee2e6; }
-        .win-rate-bar { height: 100%; transition: width 0.5s ease-in-out; font-size: 0.8em; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
-        #black-win-rate { background-color: #343a40; }
-        #white-win-rate { background-color: #f8f9fa; color: #333; text-shadow: none; }
         #action-btn { width: 100%; margin-top: 20px; padding: 15px 20px; font-size: 1.2em; font-weight: bold; }
         #action-btn:disabled { background-color: #6c757d; cursor: not-allowed; }
         #post-game-controls { margin-top: 20px; display: flex; flex-direction: column; gap: 10px; }
@@ -68,13 +62,7 @@
             <div id="player2-info" class="player-info"><strong>백돌:</strong> <span id="player2-name"></span></div>
             <div id="status-message"></div>
             <div id="timer-display"></div>
-            <div id="win-rate-container" class="hidden">
-                <h4>기대 승률</h4> <!-- 텍스트 수정 -->
-                <div class="win-rate-bar-wrapper">
-                    <div id="black-win-rate" class="win-rate-bar"></div>
-                    <div id="white-win-rate" class="win-rate-bar"></div>
-                </div>
-            </div>
+            <!-- 기대 승률 UI 제거됨 -->
             <button id="action-btn" class="hidden"></button>
             <div id="post-game-controls" class="hidden">
                 <button id="rematch-btn">다시하기</button>
@@ -94,14 +82,13 @@
 
         // --- DOM Elements ---
         const lobby = document.getElementById('lobby'), nicknameInput = document.getElementById('nickname'), createRoomBtn = document.getElementById('create-room-btn'), randomMatchBtn = document.getElementById('random-match-btn'), joinRoomBtn = document.getElementById('join-room-btn'), gameScreen = document.getElementById('game-screen'), roomIdInput = document.getElementById('room-id-input'), canvas = document.getElementById('omok-board'), ctx = canvas.getContext('2d'), statusMessage = document.getElementById('status-message'), roomIdDisplay = document.getElementById('room-id-display'), player1Name = document.getElementById('player1-name'), player2Name = document.getElementById('player2-name'), player1Info = document.getElementById('player1-info'), player2Info = document.getElementById('player2-info'), timerDisplay = document.getElementById('timer-display'), actionBtn = document.getElementById('action-btn'), postGameControls = document.getElementById('post-game-controls'), rematchBtn = document.getElementById('rematch-btn'), endGameBtn = document.getElementById('end-game-btn');
-        const winRateContainer = document.getElementById('win-rate-container'), blackWinRate = document.getElementById('black-win-rate'), whiteWinRate = document.getElementById('white-win-rate');
 
         // --- Game Constants & State ---
         const BOARD_SIZE = 15, TURN_TIME_SECONDS = 45;
         let currentRoomId = null, myPlayerNumber = null, roomUnsubscribe = null, turnInterval = null, lastKnownGameData = null;
         let isMatchmaking = false, myWaitingRoomId = null;
 
-        // --- Lobby & Game Setup (이전과 동일, 수정 없음) ---
+        // --- Lobby & Game Setup ---
         function createPlayerObject(nickname) { return { nickname: nickname, wantsRematch: false, connected: true }; }
         createRoomBtn.addEventListener('click', async () => { const nickname = nicknameInput.value.trim(); if (!nickname) { alert('닉네임을 입력해주세요.'); return; } const roomId = (Math.floor(Math.random() * 900000) + 100000).toString(); const roomRef = ref(database, `omok_rooms/${roomId}`); const initialGameState = { players: { 1: createPlayerObject(nickname) }, board: createEmptyBoard(), currentPlayer: 1, gameState: 'waiting', winner: null }; await set(roomRef, initialGameState); startGame(roomId, 1); });
         async function joinSpecificRoom(roomId, nickname) { const roomRef = ref(database, `omok_rooms/${roomId}`); const snapshot = await get(roomRef); if (snapshot.exists()) { const roomData = snapshot.val(); if (roomData.players && Object.keys(roomData.players).length < 2) { const joinerPlayerObject = createPlayerObject(nickname); const creatorPlayerObject = roomData.players[1]; let finalPlayers; let myAssignedNumber; if (Math.random() < 0.5) { finalPlayers = { 1: joinerPlayerObject, 2: creatorPlayerObject }; myAssignedNumber = 1; } else { finalPlayers = { 1: creatorPlayerObject, 2: joinerPlayerObject }; myAssignedNumber = 2; } const updatedData = { ...roomData, players: finalPlayers, gameState: 'playing' }; await set(roomRef, updatedData); isMatchmaking = false; startGame(roomId, myAssignedNumber); } else { alert('방이 꽉 찼거나 유효하지 않습니다.'); } } else { alert('방을 찾을 수 없습니다.'); } }
@@ -110,20 +97,18 @@
         joinRoomBtn.addEventListener('click', () => { const nickname = nicknameInput.value.trim(); if (!nickname) { alert('닉네임을 입력해주세요.'); return; } const roomId = roomIdInput.value.trim(); if (!roomId) { alert('방 ID를 입력해주세요.'); return; } joinSpecificRoom(roomId, nickname); });
         function startGame(roomId, playerNumber) { currentRoomId = roomId; myPlayerNumber = playerNumber; lobby.classList.add('hidden'); gameScreen.classList.remove('hidden'); roomIdDisplay.textContent = `방 ID: ${roomId}`; const myPlayerConnectionRef = ref(database, `omok_rooms/${currentRoomId}/players/${myPlayerNumber}/connected`); onDisconnect(myPlayerConnectionRef).set(false); const roomRef = ref(database, `omok_rooms/${roomId}`); roomUnsubscribe = onValue(roomRef, (snapshot) => { if (!snapshot.exists()) { if (!gameScreen.classList.contains('hidden')) { alert("방이 사라졌습니다. 로비로 돌아갑니다."); window.location.reload(); } return; } updateGame(snapshot.val()); }); canvas.addEventListener('click', handleBoardClick); window.addEventListener('resize', () => updateGame(null)); actionBtn.addEventListener('click', handleActionBtnClick); rematchBtn.addEventListener('click', handleRematch); endGameBtn.addEventListener('click', handleEndGame); }
         
-        // --- Game Update (수정됨) ---
+        // --- Game Update ---
         function updateGame(gameData) {
             if (lastKnownGameData?.gameState === 'waiting' && gameData.gameState === 'playing') { const myNickname = nicknameInput.value.trim(); if (gameData.players[1]?.nickname === myNickname) { myPlayerNumber = 1; } else if (gameData.players[2]?.nickname === myNickname) { myPlayerNumber = 2; } }
             if (gameData) { lastKnownGameData = gameData; } else if (lastKnownGameData) { gameData = lastKnownGameData; } else { return; }
             drawBoard(); drawStones(gameData.board);
             player1Name.textContent = gameData.players[1]?.nickname || '대기 중...'; player2Name.textContent = gameData.players[2]?.nickname || '대기 중...';
             player1Info.classList.remove('active'); player2Info.classList.remove('active');
-            actionBtn.classList.add('hidden'); postGameControls.classList.add('hidden'); winRateContainer.classList.add('hidden'); clearInterval(turnInterval);
+            actionBtn.classList.add('hidden'); postGameControls.classList.add('hidden'); clearInterval(turnInterval);
 
             if (gameData.gameState === 'playing') {
                 isMatchmaking = false; randomMatchBtn.textContent = '랜덤 매치'; randomMatchBtn.classList.remove('matching');
                 actionBtn.classList.remove('hidden'); actionBtn.textContent = '항복하기'; actionBtn.style.backgroundColor = '#dc3545';
-                winRateContainer.classList.remove('hidden');
-                calculateAdvantage(gameData.board); // 기대 승률 계산 호출
                 if (gameData.currentPlayer === 1) player1Info.classList.add('active'); else if (gameData.currentPlayer === 2) player2Info.classList.add('active');
                 statusMessage.textContent = `${gameData.players[gameData.currentPlayer].nickname} 님의 차례입니다.`;
                 startTurnTimer(gameData.currentPlayer);
@@ -137,12 +122,10 @@
                     statusMessage.textContent = `${gameData.players[loserNumber].nickname} 님이 항복하여 ${winnerName} 님의 승리입니다!`;
                 } else { statusMessage.textContent = `게임 종료! ${winnerName} 님의 승리입니다!`; }
                 timerDisplay.textContent = "게임 종료"; updateRematchButton(gameData);
-                winRateContainer.classList.remove('hidden');
-                updateWinRateUI(gameData.winner === 1 ? 100 : 0);
             }
         }
         
-        // --- 버튼 핸들러 및 게임 기본 로직 (수정 없음) ---
+        // --- 버튼 핸들러 및 게임 기본 로직 ---
         async function handleActionBtnClick() { const gameData = lastKnownGameData; if (!gameData) return; if (gameData.gameState === 'playing') { if (!confirm("정말로 항복하시겠습니까?")) return; const winnerNumber = myPlayerNumber === 1 ? 2 : 1; const updatedData = { ...gameData, gameState: 'finished', winner: winnerNumber, surrendered: true }; await set(ref(database, `omok_rooms/${currentRoomId}`), updatedData); } else if (gameData.gameState === 'waiting') { if (!confirm("방을 삭제하고 로비로 돌아가시겠습니까?")) return; if (myWaitingRoomId && myWaitingRoomId === currentRoomId) { await remove(ref(database, 'omok_waiting_pool')); } await remove(ref(database, `omok_rooms/${currentRoomId}`)); window.location.reload(); } }
         function updateRematchButton(gameData) { const opponentPlayerNumber = myPlayerNumber === 1 ? 2 : 1; const opponent = gameData.players[opponentPlayerNumber]; if (!opponent || opponent.connected === false) { rematchBtn.textContent = "상대방이 나갔습니다"; rematchBtn.disabled = true; return; } const myStatus = gameData.players[myPlayerNumber].wantsRematch; const opponentStatus = opponent.wantsRematch; if (myStatus) { rematchBtn.textContent = "재대결 요청함 (대기중)"; rematchBtn.disabled = true; } else if (opponentStatus) { rematchBtn.textContent = "상대방이 재대결 요청! (수락)"; rematchBtn.disabled = false; } else { rematchBtn.textContent = "다시하기"; rematchBtn.disabled = false; } }
         async function handleRematch() { const roomRef = ref(database, `omok_rooms/${currentRoomId}`); const snapshot = await get(roomRef); if (!snapshot.exists()) return; const gameData = snapshot.val(); const opponentPlayerNumber = myPlayerNumber === 1 ? 2 : 1; if (gameData.players[opponentPlayerNumber]?.wantsRematch) { const player1 = gameData.players[1]; const player2 = gameData.players[2]; if (Math.random() < 0.5) { [player1, player2] = [player2, player1]; } const newGameData = { ...gameData, board: createEmptyBoard(), currentPlayer: 1, gameState: 'playing', winner: null, surrendered: false, players: { 1: { ...player1, wantsRematch: false, connected: true }, 2: { ...player2, wantsRematch: false, connected: true } } }; await set(roomRef, newGameData); } else { const myPlayerRef = ref(database, `omok_rooms/${currentRoomId}/players/${myPlayerNumber}/wantsRematch`); await set(myPlayerRef, true); } }
@@ -157,16 +140,13 @@
         async function makeRandomMove() { const roomRef = ref(database, `omok_rooms/${currentRoomId}`); const snapshot = await get(roomRef); if (!snapshot.exists()) return; const gameData = snapshot.val(); if(gameData.currentPlayer !== myPlayerNumber) return; const emptySpots = []; for (let y = 0; y < BOARD_SIZE; y++) { for (let x = 0; x < BOARD_SIZE; x++) { if (gameData.board[y][x] === 0 && !isForbiddenMove(x, y, gameData.board)) emptySpots.push({ x, y }); }} if (emptySpots.length === 0) { statusMessage.textContent = "착수할 유효한 위치가 없습니다! 턴을 넘깁니다."; const updatedData = { ...gameData, currentPlayer: myPlayerNumber === 1 ? 2 : 1 }; await set(roomRef, updatedData); return; } const { x, y } = emptySpots[Math.floor(Math.random() * emptySpots.length)]; await placeStone(x, y, myPlayerNumber, gameData); }
         function checkWin(x, y, player, board) { const directions = [{ dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 1, dy: 1 }, { dx: 1, dy: -1 }]; for (const { dx, dy } of directions) { let count = 1; for (let i = 1; i < 5; i++) { const nx = x + i * dx, ny = y + i * dy; if (nx >= 0 && nx < BOARD_SIZE && ny >= 0 && ny < BOARD_SIZE && board[ny][nx] === player) count++; else break; } for (let i = 1; i < 5; i++) { const nx = x - i * dx, ny = y - i * dy; if (nx >= 0 && nx < BOARD_SIZE && ny >= 0 && ny < BOARD_SIZE && board[ny][nx] === player) count++; else break; } if (count >= 5) return true; } return false; }
         
-        // --- ▼▼▼ 3-3 금수 로직 (수정 및 개선) ▼▼▼ ---
+        // --- 3-3 금수 로직 ---
         function isForbiddenMove(x, y, board) {
             const tempBoard = board.map(row => [...row]);
-            tempBoard[y][x] = 1; // 흑돌(1)을 놓는다고 가정
-            
+            tempBoard[y][x] = 1;
             let openThreeCount = 0;
             const directions = [{ dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 1, dy: 1 }, { dx: 1, dy: -1 }];
-            
             for (const { dx, dy } of directions) {
-                // 한 방향과 그 반대 방향을 한 번에 체크하여 중복 방지
                 if (createsOpenThree(x, y, tempBoard, dx, dy)) {
                     openThreeCount++;
                 }
@@ -175,23 +155,17 @@
         }
 
         function createsOpenThree(x, y, board, dx, dy) {
-            // 패턴: 01110 (열린 3)
-            const p = 1; // player
-            const e = 0; // empty
+            const p = 1, e = 0;
             const patterns = [
                 {p: [e, p, p, p, e], checkIdx: 1},
                 {p: [e, p, p, e, p], checkIdx: 1},
                 {p: [e, p, e, p, p], checkIdx: 1},
             ];
-
             for(const patternInfo of patterns) {
-                // 새로 놓은 돌(x,y)이 패턴의 어느 위치에 해당하는지 모두 체크
-                for (let i = 1; i <= 3; i++) { // p가 있는 위치
+                for (let i = 1; i <= 3; i++) {
                     if (patternInfo.p[i] !== p) continue;
-                    
                     const startX = x - i * dx;
                     const startY = y - i * dy;
-
                     if (checkLine(startX, startY, board, dx, dy, patternInfo.p)) {
                         return true;
                     }
@@ -210,120 +184,7 @@
             return true;
         }
 
-        // --- ▼▼▼ 기대 승률 계산 로직 (전면 재설계) ▼▼▼ ---
-        const PATTERN_SCORES = {
-            FIVE: 100000,
-            OPEN_FOUR: 10000,
-            CLOSED_FOUR: 1000,
-            OPEN_THREE: 500,
-            CLOSED_THREE: 50,
-            OPEN_TWO: 10,
-            CLOSED_TWO: 1,
-        };
-
-        function calculateAdvantage(board) {
-            const blackScore = evaluateBoard(board, 1);
-            const whiteScore = evaluateBoard(board, 2);
-
-            // 점수가 둘 다 0일 때 50:50
-            if (blackScore === 0 && whiteScore === 0) {
-                updateWinRateUI(50);
-                return;
-            }
-            // 안정적인 비율 계산을 위해 작은 값(10)을 더함
-            const totalScore = blackScore + whiteScore + 10;
-            const blackAdvantage = (blackScore / totalScore) * 100;
-            updateWinRateUI(blackAdvantage);
-        }
-
-        function updateWinRateUI(blackPercentage) {
-            let blackP = Math.round(blackPercentage);
-            let whiteP = 100 - blackP;
-            
-            // 한쪽이 100%면 다른 쪽은 0%로 확실하게 표시
-            if(blackP > 99) { blackP = 100; whiteP = 0; }
-            if(whiteP > 99) { whiteP = 100; blackP = 0; }
-
-            blackWinRate.style.width = `${blackP}%`;
-            whiteWinRate.style.width = `${whiteP}%`;
-            blackWinRate.textContent = `${blackP}%`;
-            whiteWinRate.textContent = `${whiteP}%`;
-        }
-
-        function evaluateBoard(board, player) {
-            let totalScore = 0;
-            const directions = [
-                { dx: 1, dy: 0 },  // 가로
-                { dx: 0, dy: 1 },  // 세로
-                { dx: 1, dy: 1 },  // 대각선 \
-                { dx: 1, dy: -1 }  // 대각선 /
-            ];
-            
-            // 모든 라인을 중복 없이 한 번씩만 분석
-            for (let y = 0; y < BOARD_SIZE; y++) {
-                for (let x = 0; x < BOARD_SIZE; x++) {
-                    directions.forEach(({ dx, dy }) => {
-                        // 대각선 / 방향은 아래쪽 절반만 스캔 (중복 방지)
-                        if (dx === 1 && dy === -1 && y < 4) return;
-
-                        let stoneCount = 0;
-                        let emptyCount = 0;
-                        let openEnds = 0;
-                        
-                        // 현재 위치에서 5칸 라인 분석
-                        let blocked = false;
-                        for (let i = 0; i < 5; i++) {
-                            const nx = x + i * dx;
-                            const ny = y + i * dy;
-                            if (nx < 0 || nx >= BOARD_SIZE || ny < 0 || ny >= BOARD_SIZE) {
-                                blocked = true;
-                                break;
-                            }
-                            if (board[ny][nx] === player) stoneCount++;
-                            else if (board[ny][nx] === 0) emptyCount++;
-                            else {
-                                blocked = true; // 상대 돌에 의해 막힘
-                                break;
-                            }
-                        }
-
-                        if (blocked) return;
-
-                        // 라인 앞뒤의 상태를 확인하여 열린 상태인지 판단
-                        const beforeX = x - dx;
-                        const beforeY = y - dy;
-                        const afterX = x + 5 * dx;
-                        const afterY = y + 5 * dy;
-
-                        if (beforeX >= 0 && beforeX < BOARD_SIZE && beforeY >= 0 && beforeY < BOARD_SIZE && board[beforeY][beforeX] === 0) {
-                            openEnds++;
-                        }
-                        if (afterX >= 0 && afterX < BOARD_SIZE && afterY >= 0 && afterY < BOARD_SIZE && board[afterY][afterX] === 0) {
-                            openEnds++;
-                        }
-                        
-                        totalScore += getScore(stoneCount, openEnds);
-                    });
-                }
-            }
-            return totalScore;
-        }
-
-        function getScore(stoneCount, openEnds) {
-            if (stoneCount === 5) return PATTERN_SCORES.FIVE;
-            if (openEnds === 0 && stoneCount < 4) return 0; // 양쪽이 막힌 4목 미만은 점수 없음
-
-            switch (stoneCount) {
-                case 4:
-                    return openEnds === 2 ? PATTERN_SCORES.OPEN_FOUR : PATTERN_SCORES.CLOSED_FOUR;
-                case 3:
-                    return openEnds === 2 ? PATTERN_SCORES.OPEN_THREE : PATTERN_SCORES.CLOSED_THREE;
-                case 2:
-                    return openEnds === 2 ? PATTERN_SCORES.OPEN_TWO : PATTERN_SCORES.CLOSED_TWO;
-                default:
-                    return 0;
-            }
-        }
+        // --- 기대 승률 로직 전체 제거됨 ---
         
         window.addEventListener('beforeunload', () => { if (currentRoomId && roomUnsubscribe) { roomUnsubscribe(); } });
     </script>
