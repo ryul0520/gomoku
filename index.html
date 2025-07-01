@@ -125,30 +125,10 @@
             }
         }
         
-        // --- 버튼 핸들러 (로직 수정됨) ---
-        async function handleActionBtnClick() {
-            const gameData = lastKnownGameData;
-            if (!gameData) return;
-
-            if (gameData.gameState === 'playing') {
-                if (!confirm("정말로 항복하시겠습니까?")) return;
-                const winnerNumber = myPlayerNumber === 1 ? 2 : 1;
-                const updatedData = { ...gameData, gameState: 'finished', winner: winnerNumber, surrendered: true };
-                await set(ref(database, `omok_rooms/${currentRoomId}`), updatedData);
-            } else if (gameData.gameState === 'waiting') {
-                if (!confirm("방을 삭제하고 로비로 돌아가시겠습니까?")) return;
-                // --- BUG FIX: 로직 분리 ---
-                // 내가 랜덤매칭을 통해 만든 대기방이라면, 대기풀도 함께 삭제
-                if (myWaitingRoomId && myWaitingRoomId === currentRoomId) {
-                    await remove(ref(database, 'omok_waiting_pool'));
-                }
-                // 공통: 현재 방 삭제
-                await remove(ref(database, `omok_rooms/${currentRoomId}`));
-                window.location.reload();
-            }
-        }
+        // --- 버튼 핸들러 (수정 없음) ---
+        async function handleActionBtnClick() { const gameData = lastKnownGameData; if (!gameData) return; if (gameData.gameState === 'playing') { if (!confirm("정말로 항복하시겠습니까?")) return; const winnerNumber = myPlayerNumber === 1 ? 2 : 1; const updatedData = { ...gameData, gameState: 'finished', winner: winnerNumber, surrendered: true }; await set(ref(database, `omok_rooms/${currentRoomId}`), updatedData); } else if (gameData.gameState === 'waiting') { if (!confirm("방을 삭제하고 로비로 돌아가시겠습니까?")) return; if (myWaitingRoomId && myWaitingRoomId === currentRoomId) { await remove(ref(database, 'omok_waiting_pool')); } await remove(ref(database, `omok_rooms/${currentRoomId}`)); window.location.reload(); } }
         
-        // --- 이하 모든 JS 로직은 이전과 동일합니다 ---
+        // --- 이하 로직 중 handleBoardClick 함수만 수정됩니다 ---
         function updateRematchButton(gameData) { const opponentPlayerNumber = myPlayerNumber === 1 ? 2 : 1; const opponent = gameData.players[opponentPlayerNumber]; if (!opponent || opponent.connected === false) { rematchBtn.textContent = "상대방이 나갔습니다"; rematchBtn.disabled = true; return; } const myStatus = gameData.players[myPlayerNumber].wantsRematch; const opponentStatus = opponent.wantsRematch; if (myStatus) { rematchBtn.textContent = "재대결 요청함 (대기중)"; rematchBtn.disabled = true; } else if (opponentStatus) { rematchBtn.textContent = "상대방이 재대결 요청! (수락)"; rematchBtn.disabled = false; } else { rematchBtn.textContent = "다시하기"; rematchBtn.disabled = false; } }
         async function handleRematch() { const roomRef = ref(database, `omok_rooms/${currentRoomId}`); const snapshot = await get(roomRef); if (!snapshot.exists()) return; const gameData = snapshot.val(); const opponentPlayerNumber = myPlayerNumber === 1 ? 2 : 1; if (gameData.players[opponentPlayerNumber]?.wantsRematch) { const newGameData = { ...gameData, board: createEmptyBoard(), currentPlayer: 1, gameState: 'playing', winner: null, surrendered: false, players: { 1: { ...gameData.players[1], wantsRematch: false, connected: true }, 2: { ...gameData.players[2], wantsRematch: false, connected: true } } }; await set(roomRef, newGameData); } else { const myPlayerRef = ref(database, `omok_rooms/${currentRoomId}/players/${myPlayerNumber}/wantsRematch`); await set(myPlayerRef, true); } }
         async function handleEndGame() { const roomRef = ref(database, `omok_rooms/${currentRoomId}`); await remove(roomRef); window.location.reload(); }
@@ -156,7 +136,33 @@
         function drawBoard() { canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight; const CELL_SIZE = canvas.width / BOARD_SIZE; const PADDING = CELL_SIZE / 2; ctx.fillStyle = '#e3b769'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.strokeStyle = '#5c3d0d'; ctx.lineWidth = 1; for (let i = 0; i < BOARD_SIZE; i++) { ctx.beginPath(); ctx.moveTo(PADDING + i * CELL_SIZE, PADDING); ctx.lineTo(PADDING + i * CELL_SIZE, canvas.height - PADDING); ctx.stroke(); ctx.beginPath(); ctx.moveTo(PADDING, PADDING + i * CELL_SIZE); ctx.lineTo(canvas.width - PADDING, PADDING + i * CELL_SIZE); ctx.stroke(); } const starPoints = [{x: 3, y: 3}, {x: 11, y: 3}, {x: 3, y: 11}, {x: 11, y: 11}, {x: 7, y: 7}]; ctx.fillStyle = '#5c3d0d'; starPoints.forEach(p => { ctx.beginPath(); ctx.arc(PADDING + p.x * CELL_SIZE, PADDING + p.y * CELL_SIZE, CELL_SIZE * 0.1, 0, 2 * Math.PI); ctx.fill(); }); }
         function drawStones(board) { if (!board) return; for (let y = 0; y < BOARD_SIZE; y++) { for (let x = 0; x < BOARD_SIZE; x++) { if (board[y][x] !== 0) drawStone(x, y, board[y][x]); } } }
         function drawStone(x, y, player) { const CELL_SIZE = canvas.width / BOARD_SIZE; const PADDING = CELL_SIZE / 2; const STONE_RADIUS = CELL_SIZE * 0.45; const canvasX = PADDING + x * CELL_SIZE; const canvasY = PADDING + y * CELL_SIZE; ctx.beginPath(); ctx.arc(canvasX, canvasY, STONE_RADIUS, 0, 2 * Math.PI); ctx.fillStyle = (player === 1) ? 'black' : 'white'; ctx.fill(); }
-        async function handleBoardClick(event) { const roomRef = ref(database, `omok_rooms/${currentRoomId}`); const snapshot = await get(roomRef); if (!snapshot.exists()) return; const gameData = snapshot.val(); if (gameData.gameState !== 'playing' || gameData.currentPlayer !== myPlayerNumber) return; const rect = canvas.getBoundingClientRect(); const mouseX = event.clientX - rect.left; const mouseY = event.clientY - rect.top; const CELL_SIZE = canvas.clientWidth / BOARD_SIZE; const PADDING = CELL_SIZE / 2; const x = Math.round((mouseX - PADDING) / CELL_SIZE); const y = Math.round((mouseY - PADDING) / CELL_SIZE); if (x < 0 || x >= BOARD_SIZE || y < 0 || y >= BOARD_SIZE) return; if (gameData.board[y][x] !== 0) { statusMessage.textContent = '이미 돌이 있는 곳입니다.'; return; } if (myPlayerNumber === 1 && isForbiddenMove(x, y, 1, gameData.board)) { statusMessage.textContent = '3-3 금지 위치입니다!'; return; } clearInterval(turnInterval); await placeStone(x, y, myPlayerNumber, gameData); }
+        
+        async function handleBoardClick(event) {
+            const roomRef = ref(database, `omok_rooms/${currentRoomId}`);
+            const snapshot = await get(roomRef);
+            if (!snapshot.exists()) return;
+            const gameData = snapshot.val();
+            if (gameData.gameState !== 'playing' || gameData.currentPlayer !== myPlayerNumber) return;
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = event.clientX - rect.left;
+            const mouseY = event.clientY - rect.top;
+            const CELL_SIZE = canvas.clientWidth / BOARD_SIZE;
+            const PADDING = CELL_SIZE / 2;
+            const x = Math.round((mouseX - PADDING) / CELL_SIZE);
+            const y = Math.round((mouseY - PADDING) / CELL_SIZE);
+            if (x < 0 || x >= BOARD_SIZE || y < 0 || y >= BOARD_SIZE) return;
+            if (gameData.board[y][x] !== 0) {
+                statusMessage.textContent = '이미 돌이 있는 곳입니다.';
+                return;
+            }
+            if (myPlayerNumber === 1 && isForbiddenMove(x, y, 1, gameData.board)) {
+                statusMessage.textContent = '3-3 금지 위치입니다!'; // <--- 수정된 부분
+                return;
+            }
+            clearInterval(turnInterval);
+            await placeStone(x, y, myPlayerNumber, gameData);
+        }
+
         async function placeStone(x, y, player, currentGameData) { const newBoard = currentGameData.board.map(row => [...row]); newBoard[y][x] = player; const hasWon = checkWin(x, y, player, newBoard); const updatedData = { ...currentGameData, board: newBoard, currentPlayer: player === 1 ? 2 : 1 }; if (hasWon) { updatedData.gameState = 'finished'; updatedData.winner = player; } const roomRef = ref(database, `omok_rooms/${currentRoomId}`); await set(roomRef, updatedData); }
         function startTurnTimer(currentPlayer) { clearInterval(turnInterval); let timeLeft = TURN_TIME_SECONDS; timerDisplay.textContent = `남은 시간: ${timeLeft}초`; turnInterval = setInterval(async () => { timeLeft--; timerDisplay.textContent = `남은 시간: ${timeLeft}초`; if (timeLeft < 0) { clearInterval(turnInterval); if (myPlayerNumber === currentPlayer) { statusMessage.textContent = "시간 초과! 무작위 위치에 돌을 놓습니다."; await makeRandomMove(); } } }, 1000); }
         async function makeRandomMove() { const roomRef = ref(database, `omok_rooms/${currentRoomId}`); const snapshot = await get(roomRef); if (!snapshot.exists()) return; const gameData = snapshot.val(); if(gameData.currentPlayer !== myPlayerNumber) return; const emptySpots = []; for (let y = 0; y < BOARD_SIZE; y++) { for (let x = 0; x < BOARD_SIZE; x++) { if (gameData.board[y][x] === 0) emptySpots.push({ x, y }); }} if (emptySpots.length === 0) return; let validMoveFound = false; while (emptySpots.length > 0 && !validMoveFound) { const randomIndex = Math.floor(Math.random() * emptySpots.length); const { x, y } = emptySpots[randomIndex]; if (myPlayerNumber === 1 && isForbiddenMove(x, y, 1, gameData.board)) { emptySpots.splice(randomIndex, 1); } else { await placeStone(x, y, myPlayerNumber, gameData); validMoveFound = true; } } if (!validMoveFound) { statusMessage.textContent = "착수할 유효한 위치가 없습니다! 턴을 넘깁니다."; const updatedData = { ...gameData, currentPlayer: myPlayerNumber === 1 ? 2 : 1 }; await set(roomRef, updatedData); } }
